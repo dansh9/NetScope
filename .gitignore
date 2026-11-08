@@ -21,3 +21,9 @@ Thumbs.db
 # Captures / generated data
 *.pcap
 *.pcapng
+# Network logs and generated data
+*.jsonl
+data/*.json
+# Generated network data
+*.jsonl
+data/*.json

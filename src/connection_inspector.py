@@ -1,7 +1,8 @@
 import psutil
 import socket
 import time
-
+import json
+from datetime import datetime, timezone
 
 POLL_TIME = 5
 
@@ -75,8 +76,25 @@ def should_display(metadata):
 
     if metadata["status"] == "TIME_WAIT":
         return False
-
     return True
+def save_event(event_type, metadata,details=None ):
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    event = {
+        "timestamp": timestamp,
+        "event_type": event_type,
+        "metadata": metadata
+    }
+    if details is not None:
+        event["details"] = details
+
+    json_line = json.dumps(event)
+
+    with open("NetScope/data/events.jsonl", "a", encoding="utf-8") as file:
+        file.write(json_line + "\n")
+
+    return event
+
 def make_snapshot():
     snapshot = {}
 
@@ -106,6 +124,7 @@ def make_snapshot():
 previous_snapshot = make_snapshot()
 
 while True:
+
     time.sleep(POLL_TIME)
 
     current_snapshot = make_snapshot()
@@ -123,6 +142,7 @@ while True:
         if not should_display(metadata):
             continue
         print()
+        save_event("NEW", metadata)
         print("[NEW]")
         print("Process:", metadata["process_name"])
         print("PID:", metadata["pid"])
@@ -136,7 +156,7 @@ while True:
         metadata = previous_snapshot[key]
         if not should_display(metadata):
             continue
-
+        save_event("DISAPPEARED", metadata)
         print()
         print("[DISAPPEARED]")
         print("Process:", metadata["process_name"])
@@ -158,6 +178,7 @@ while True:
                 continue
 
             print()
+            save_event("STATE_CHANGED", current_metadata, details={"previous_status": previous_status, "current_status": current_status})
             print("[STATE CHANGED]")
             print("Process:", current_metadata["process_name"])
             print("PID:", current_metadata["pid"])
