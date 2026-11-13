@@ -77,8 +77,29 @@ with open("netscope/experiments/capture.pcap", "rb") as file:
             if len(ip_data) < 1:
                 raise ValueError("Missing IP header")
 
-            version = ip_data[0] >> 4
+            version = ip_data[0] // 16# split the first byte into version and IHL
+            if version != 4: #v4 only
+                continue
+
+            if len(ip_data) < 20:
+                raise ValueError("Incomplete IPv4 header")
             
+            ihl = ip_data[0] % 16
+            header_length = ihl * 4
+            total_length = int.from_bytes(ip_data[2:4], "big")
+
+            protocol = ip_data[9]
+            if(protocol == 6): #TCP
+                protocol_name = "TCP"
+            elif(protocol == 17): #UDP
+                protocol_name = "UDP"
+            else:
+                protocol_name = "Other"
+
+            source_port = int.from_bytes(ip_data[header_length:header_length+2], "big")
+            destination_port = int.from_bytes(ip_data[header_length+2:header_length+4], "big") 
+            source_ip = ".".join(str(b) for b in ip_data[12:16])
+            destination_ip = ".".join(str(b) for b in ip_data[16:20])
             if timestamp_resolution == "microseconds":
              timestamp = ts_sec + ts_fraction / 1_000_000
             else:
@@ -90,5 +111,12 @@ with open("netscope/experiments/capture.pcap", "rb") as file:
             print("Timestamp:", timestamp)
             print("Captured Length:", incl_len)
             print("Original Length:", orig_len)
-
+            print("Total Length:", total_length)
+            print("Header Length:", header_length)
+            
+            print("Protocol:", protocol_name)
+            print("Source IP:", source_ip)
+            print("Destination IP:", destination_ip)
+            print("Source Port:", source_port)
+            print("Destination Port:", destination_port)
     print("Total Packets:", packet_count)
