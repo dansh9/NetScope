@@ -1,4 +1,7 @@
 import time 
+import socket
+from connection_inspector import make_snapshot
+
 with open("netscope/experiments/capture.pcap", "rb") as file:
     global_header = file.read(24)
 
@@ -160,3 +163,44 @@ with open("netscope/experiments/capture.pcap", "rb") as file:
         print("Flow:", key)
         print("Packets:", stats["packets"])
         print("Bytes:", stats["bytes"])
+    
+    snapshot = make_snapshot()
+
+    for key, stats in flows.items():
+        source_ip, destination_ip, source_port, destination_port, protocol = key
+
+        if protocol != 6:
+            continue
+
+        forward_key = (
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+            source_ip,
+            source_port,
+            destination_ip,
+            destination_port
+        )
+
+        reverse_key = (
+            socket.AF_INET,
+            socket.SOCK_STREAM,
+            destination_ip,
+            destination_port,
+            source_ip,
+            source_port
+        )
+
+        print("Flow:", key)
+
+        found = False
+
+        for connection_key in (forward_key, reverse_key):
+            if connection_key in snapshot:
+                metadata = snapshot[connection_key]
+                print("Process:", metadata["process_name"])
+                print("PID:", metadata["pid"])
+                found = True
+
+        if not found:
+            print("No process found in current snapshot")
+    
