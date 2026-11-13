@@ -32,7 +32,7 @@ with open("netscope/experiments/capture.pcap", "rb") as file:
     snaplen = int.from_bytes(global_header[16:20], byteorder=byte_order)
 
     packet_count = 0
-
+    flows = {}
     while True:
             packet_header = file.read(16)
 
@@ -84,22 +84,56 @@ with open("netscope/experiments/capture.pcap", "rb") as file:
             if len(ip_data) < 20:
                 raise ValueError("Incomplete IPv4 header")
             
+          
             ihl = ip_data[0] % 16
             header_length = ihl * 4
+
+            if ihl < 5 or len(ip_data) < header_length:
+                raise ValueError("Invalid IPv4 header")
+
             total_length = int.from_bytes(ip_data[2:4], "big")
 
+            if total_length < header_length:
+                raise ValueError("Invalid IP total length")
+
             protocol = ip_data[9]
-            if(protocol == 6): #TCP
+
+            if protocol == 6:
                 protocol_name = "TCP"
-            elif(protocol == 17): #UDP
+            elif protocol == 17:
                 protocol_name = "UDP"
             else:
                 protocol_name = "Other"
 
-            source_port = int.from_bytes(ip_data[header_length:header_length+2], "big")
-            destination_port = int.from_bytes(ip_data[header_length+2:header_length+4], "big") 
+            source_port = None
+            destination_port = None
+
+            if protocol == 6 or protocol == 17:
+                if total_length < header_length + 4 or len(ip_data) < header_length + 4:
+                    raise ValueError("Incomplete transport header")
+
+                source_port = int.from_bytes(ip_data[header_length:header_length+2], "big")
+                destination_port = int.from_bytes(ip_data[header_length+2:header_length+4], "big")
+ 
             source_ip = ".".join(str(b) for b in ip_data[12:16])
             destination_ip = ".".join(str(b) for b in ip_data[16:20])
+
+            if source_port is not None and destination_port is not None:
+                key = (source_ip, destination_ip, source_port, destination_port, protocol)
+                reverse_key = (destination_ip, source_ip, destination_port, source_port, protocol)
+
+                if key in flows:
+                    flow_key = key
+                elif reverse_key in flows:
+                    flow_key = reverse_key
+                else:
+                    flow_key = key
+                    flows[flow_key] = {"packets": 0, "bytes": 0}
+
+                flows[flow_key]["packets"] += 1
+                flows[flow_key]["bytes"] += total_length
+
+
             if timestamp_resolution == "microseconds":
              timestamp = ts_sec + ts_fraction / 1_000_000
             else:
@@ -113,10 +147,16 @@ with open("netscope/experiments/capture.pcap", "rb") as file:
             print("Original Length:", orig_len)
             print("Total Length:", total_length)
             print("Header Length:", header_length)
-            
+
             print("Protocol:", protocol_name)
             print("Source IP:", source_ip)
             print("Destination IP:", destination_ip)
             print("Source Port:", source_port)
             print("Destination Port:", destination_port)
     print("Total Packets:", packet_count)
+    print("Total Flows:", len(flows))
+
+    for key, stats in flows.items():
+        print("Flow:", key)
+        print("Packets:", stats["packets"])
+        print("Bytes:", stats["bytes"])
